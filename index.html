@@ -1,15 +1,82 @@
-
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>員工出勤系統</title>
+  <title>員工出勤系統｜LINE 登入測試</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body{font-family:system-ui,"Noto Sans TC",sans-serif;background:#f4f7f8;margin:0;padding:24px;color:#243443}
+    main{max-width:440px;margin:25px auto;background:white;padding:24px;border-radius:14px;box-shadow:0 2px 14px #00000012}
+    h1{font-size:24px;color:#128253}p{line-height:1.6}button{padding:14px 18px;background:#06a568;color:#fff;border:0;border-radius:10px;width:100%;font-size:17px;margin-top:12px}button:disabled{opacity:.55}
+    #status{white-space:pre-wrap;padding:12px;background:#edf4f6;border-radius:8px;overflow-wrap:anywhere}#status.error{background:#ffebea;color:#9f2929}#status.ok{background:#e1f5e9;color:#14643e}
+    .hidden{display:none}small{color:#667585}
+  </style>
 </head>
-<body style="font-family:Arial;text-align:center;padding:40px;">
+<body>
+<main>
   <h1>員工出勤系統</h1>
-  <h2 style="color:green;">GitHub Pages 測試成功</h2>
-  <p>LINE 員工出勤系統網頁空間已建立。</p>
-  <p>目前為測試頁面，尚未開放正式打卡。</p>
+  <p>LINE LIFF 登入測試（目前不會執行打卡）</p>
+  <div id="status" role="status">準備初始化 LIFF...</div>
+  <button id="login" class="hidden" onclick="login()">使用 LINE 登入</button>
+  <button id="retry" class="hidden" onclick="initialize()">重新檢查</button>
+  <p id="profile"></p>
+  <small>測試版：不傳送身分資料、GPS 或打卡紀錄至任何伺服器。</small>
+</main>
+<script>
+  // 將下方文字改成 LINE Developers 顯示的真正 LIFF ID。
+  const LIFF_ID = '2012143443-M9lfVJYA';
+  const statusElement = document.getElementById('status');
+  const loginButton = document.getElementById('login');
+  const retryButton = document.getElementById('retry');
+  const profileElement = document.getElementById('profile');
+
+  function setStatus(message, kind = '') {
+    statusElement.textContent = message;
+    statusElement.className = kind;
+  }
+
+  async function initialize() {
+    loginButton.classList.add('hidden');
+    retryButton.classList.add('hidden');
+    profileElement.textContent = '';
+    if (LIFF_ID === 'REPLACE_WITH_LIFF_ID') {
+      setStatus('尚未填入 LIFF ID，請先修改網頁程式碼。', 'error');
+      return;
+    }
+    if (!window.liff) {
+      setStatus('LIFF SDK 無法載入，請檢查網路。', 'error');
+      return;
+    }
+    setStatus('正在啟動 LINE LIFF...');
+    try {
+      await Promise.race([
+        liff.init({ liffId: LIFF_ID }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('LIFF 初始化超過 15 秒')), 15000))
+      ]);
+      if (!liff.isLoggedIn()) {
+        setStatus('LIFF 初始化成功，尚未登入 LINE。');
+        loginButton.classList.remove('hidden');
+        return;
+      }
+      setStatus('LINE 登入成功！', 'ok');
+      if (liff.isInClient()) {
+        profileElement.textContent = '目前在 LINE 應用程式內開啟。';
+      }
+    } catch (error) {
+      setStatus('LIFF 初始化失敗：' + (error.message || String(error)), 'error');
+      retryButton.classList.remove('hidden');
+    }
+  }
+
+  function login() {
+    try {
+      liff.login();
+    } catch (error) {
+      setStatus('LINE 登入啟動失敗：' + (error.message || String(error)), 'error');
+    }
+  }
+  window.addEventListener('load', initialize);
+</script>
 </body>
 </html>
