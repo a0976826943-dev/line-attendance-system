@@ -67,7 +67,17 @@ if (!idToken) {
   return;
 }
 
-setStatus('LINE 登入成功，已取得 ID Token（尚未傳送至後端）。', 'ok');
+
+setStatus('LINE 已登入，正在進行後端身分驗證...', '');
+
+const verified = await verifyIdentityWithBackend(idToken);
+
+if (verified) {
+  setStatus('LINE 後端身分驗證成功！', 'ok');
+} else {
+  setStatus('LINE 後端身分驗證未通過。', 'error');
+}
+
 
       if (liff.isInClient()) {
         profileElement.textContent = '目前在 LINE 應用程式內開啟。';
@@ -77,6 +87,29 @@ setStatus('LINE 登入成功，已取得 ID Token（尚未傳送至後端）。'
       retryButton.classList.remove('hidden');
     }
   }
+
+async function verifyIdentityWithBackend(idToken) {
+  const response = await fetch(
+    'https://line-attendance-api.a0976826943.workers.dev/verify-identity',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        idToken: idToken
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('後端身分驗證請求失敗');
+  }
+
+  const result = await response.json();
+
+  return result.ok === true && result.verified === true;
+}
 
   function login() {
     try {
