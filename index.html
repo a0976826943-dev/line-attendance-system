@@ -59,7 +59,16 @@
         loginButton.classList.remove('hidden');
         return;
       }
-      setStatus('LINE 登入成功！', 'ok');
+      
+const idToken = liff.getIDToken();
+
+if (!idToken) {
+  setStatus('LINE 已登入，但尚未取得 ID Token。', 'error');
+  return;
+}
+
+setStatus('LINE 登入成功，已取得 ID Token（尚未傳送至後端）。', 'ok');
+
       if (liff.isInClient()) {
         profileElement.textContent = '目前在 LINE 應用程式內開啟。';
       }
