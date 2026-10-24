@@ -119,7 +119,9 @@ const locationsList = document.getElementById('locationsList');
 
 const gpsTestButton = document.getElementById('gpsTestButton');
 const gpsTestStatus = document.getElementById('gpsTestStatus');
-
+  
+let approvedLocations = [];
+  
   function setStatus(message, kind = '') {
     statusElement.textContent = message;
     statusElement.className = kind;
@@ -144,6 +146,7 @@ employeeStatus.textContent = '';
     
 locationsList.replaceChildren();
 locationsStatus.textContent = '正在準備地點資料...';
+approvedLocations = [];
     
     if (LIFF_ID === 'REPLACE_WITH_LIFF_ID') {
       setStatus('尚未填入 LIFF ID，請先修改網頁程式碼。', 'error');
@@ -195,7 +198,8 @@ if (verified) {
       boundEmployeeCode.textContent = initResult.employeeCode;
       boundEmployeeName.textContent = initResult.employeeName;
       employeeStatus.textContent = 'LINE 帳號已完成員工身分綁定。';
-      
+
+      approvedLocations = Array.isArray(initResult.locations) ? initResult.locations : [];
       renderLocations(initResult.locations);
 
       employeeSection.classList.remove('hidden');
@@ -345,6 +349,83 @@ function renderLocations(locations) {
       : '目前沒有有效的打卡地點資料。';
 }
 
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+  const coordinates = [lat1, lon1, lat2, lon2];
+
+  if (
+    !coordinates.every(
+      value => typeof value === 'number' && Number.isFinite(value)
+    )
+  ) {
+    return NaN;
+  }
+
+  if (
+    Math.abs(lat1) > 90 ||
+    Math.abs(lat2) > 90 ||
+    Math.abs(lon1) > 180 ||
+    Math.abs(lon2) > 180
+  ) {
+    return NaN;
+  }
+
+  const toRadians = degrees => degrees * Math.PI / 180;
+  const earthRadius = 6371000;
+
+  const deltaLat = toRadians(lat2 - lat1);
+  const deltaLon = toRadians(lon2 - lon1);
+
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(lat1)) *
+    Math.cos(toRadians(lat2)) *
+    Math.sin(deltaLon / 2) ** 2;
+
+  const safeA = Math.min(1, Math.max(0, a));
+
+  const c = 2 * Math.atan2(
+    Math.sqrt(safeA),
+    Math.sqrt(1 - safeA)
+  );
+
+  return earthRadius * c;
+}
+
+function getOfficeDistanceResult(position) {
+  const office = approvedLocations.find(function (location) {
+    return location &&
+      location.id === 'LOC001' &&
+      String(location.type || '').toUpperCase() === 'FIXED';
+  });
+
+  if (!office) {
+    return '找不到 LOC001 公司辦公室的核准地點資料。';
+  }
+
+  const distance = calculateDistanceMeters(
+    position.coords.latitude,
+    position.coords.longitude,
+    Number(office.lat),
+    Number(office.lon)
+  );
+
+  const radius = Number(office.radius);
+
+  if (!Number.isFinite(distance) ||
+      !Number.isFinite(radius) || radius <= 0) {
+    return '固定地點座標或半徑資料不正確。';
+  }
+
+  const withinRange = distance <= radius;
+
+  return '距離公司辦公室約 ' +
+    Math.round(distance) + ' 公尺；' +
+    (withinRange
+      ? '目前位於設定的 ' + Math.round(radius) + ' 公尺範圍內。'
+      : '目前超出設定的 ' + Math.round(radius) + ' 公尺範圍。') +
+    '（僅供測試，正式打卡仍需後端驗證）';
+}
+
 function testGpsLocation() {
   if (!navigator.geolocation) {
     gpsTestStatus.textContent = '此裝置不支援 GPS 定位功能。';
@@ -361,9 +442,14 @@ function testGpsLocation() {
       if (!Number.isFinite(accuracy) || accuracy < 0) {
         gpsTestStatus.textContent = '無法取得有效的 GPS 定位精度。';
       } else {
-        gpsTestStatus.textContent =
-          'GPS 定位成功！目前定位精度約 ' +
-          Math.round(accuracy) + ' 公尺。';
+        
+const distanceResult = getOfficeDistanceResult(position);
+
+gpsTestStatus.textContent =
+  'GPS 定位成功！目前定位精度約 ' +
+  Math.round(accuracy) + ' 公尺。 ' +
+  distanceResult;
+
       }
 
       gpsTestButton.disabled = false;
