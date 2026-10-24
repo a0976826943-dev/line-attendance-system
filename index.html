@@ -22,6 +22,23 @@
   <button id="retry" class="hidden" onclick="initialize()">重新檢查</button>
   <p id="profile"></p>
   
+<section id="employeeSection" class="hidden">
+  <h2>我的員工資料</h2>
+  <p>LINE 帳號已完成員工身分綁定。</p>
+
+  <p>
+    員工編號：
+    <strong id="boundEmployeeCode"></strong>
+  </p>
+
+  <p>
+    員工姓名：
+    <strong id="boundEmployeeName"></strong>
+  </p>
+
+  <p id="employeeStatus" role="status" aria-live="polite"></p>
+</section>
+
 <section id="bindSection" class="hidden">
   <h2>員工 LINE 身分綁定</h2>
   <p>首次使用請輸入員工編號及一次性啟用碼。</p>
@@ -69,6 +86,11 @@ const enrollmentCodeInput = document.getElementById('enrollmentCode');
 const bindButton = document.getElementById('bindButton');
 const bindStatus = document.getElementById('bindStatus');
 
+const employeeSection = document.getElementById('employeeSection');
+const boundEmployeeCode = document.getElementById('boundEmployeeCode');
+const boundEmployeeName = document.getElementById('boundEmployeeName');
+const employeeStatus = document.getElementById('employeeStatus');
+
   function setStatus(message, kind = '') {
     statusElement.textContent = message;
     statusElement.className = kind;
@@ -86,6 +108,10 @@ enrollmentCodeInput.value = '';
 bindStatus.textContent = '';
 employeeCodeInput.readOnly = false;
 enrollmentCodeInput.readOnly = false;
+employeeSection.classList.add('hidden');
+boundEmployeeCode.textContent = '';
+boundEmployeeName.textContent = '';
+employeeStatus.textContent = '';
 
     
     if (LIFF_ID === 'REPLACE_WITH_LIFF_ID') {
@@ -121,19 +147,59 @@ setStatus('LINE 已登入，正在進行後端身分驗證...', '');
 const verified = await verifyIdentityWithBackend(idToken);
 
 
-if (verified) {
-  setStatus('LINE 後端身分驗證成功！', 'ok');
 
-  bindSection.classList.remove('hidden');
-  bindButton.disabled = false;
-  bindStatus.textContent = '請輸入員工編號與一次性啟用碼，完成 LINE 帳號綁定。';
+if (verified) {
+  setStatus('LINE 後端身分驗證成功，正在查詢員工資料...', 'ok');
+
+  // 查詢期間先停用綁定按鈕
+  bindSection.classList.add('hidden');
+  employeeSection.classList.add('hidden');
+  bindButton.disabled = true;
+
+  try {
+    const initResult = await getEmployeeInitWithBackend(idToken);
+
+    if (initResult.bound === true) {
+      // 已綁定員工：顯示正式員工資料
+      boundEmployeeCode.textContent = initResult.employeeCode;
+      boundEmployeeName.textContent = initResult.employeeName;
+      employeeStatus.textContent = 'LINE 帳號已完成員工身分綁定。';
+
+      employeeSection.classList.remove('hidden');
+      bindSection.classList.add('hidden');
+      bindButton.disabled = true;
+
+      setStatus('員工身分確認成功！', 'ok');
+
+    } else {
+      // 尚未綁定：顯示首次綁定表單
+      employeeSection.classList.add('hidden');
+      bindSection.classList.remove('hidden');
+      bindButton.disabled = false;
+
+      bindStatus.textContent =
+        '請輸入員工編號與一次性啟用碼，完成 LINE 帳號綁定。';
+
+      setStatus('LINE 驗證成功，請完成員工身分綁定。', 'ok');
+    }
+
+  } catch (error) {
+    // 查詢失敗不能當作尚未綁定
+    employeeSection.classList.add('hidden');
+    bindSection.classList.add('hidden');
+    bindButton.disabled = true;
+
+    setStatus('員工資料查詢失敗，請重新檢查登入。', 'error');
+  }
 
 } else {
   setStatus('LINE 後端身分驗證未通過。', 'error');
 
+  employeeSection.classList.add('hidden');
   bindSection.classList.add('hidden');
   bindButton.disabled = true;
 }
+
 
 
 
@@ -167,6 +233,40 @@ async function verifyIdentityWithBackend(idToken) {
   const result = await response.json();
 
   return result.ok === true && result.verified === true;
+}
+
+async function getEmployeeInitWithBackend(idToken) {
+  const response = await fetch(
+    'https://line-attendance-api.a0976826943.workers.dev/get-init',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        idToken: idToken
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('員工綁定狀態查詢失敗');
+  }
+
+  const result = await response.json();
+
+  if (!result || result.ok !== true ||
+      typeof result.bound !== 'boolean') {
+    throw new Error('員工綁定狀態回應不正確');
+  }
+
+  if (result.bound === true &&
+      (typeof result.employeeCode !== 'string' ||
+       typeof result.employeeName !== 'string')) {
+    throw new Error('員工資料回應不正確');
+  }
+
+  return result;
 }
 
 async function bindEmployeeWithBackend(idToken, employeeCode, enrollmentCode) {
