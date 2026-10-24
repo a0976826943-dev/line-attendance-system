@@ -37,6 +37,15 @@
   </p>
 
   <p id="employeeStatus" role="status" aria-live="polite"></p>
+
+  <div id="locationsSection">
+    <h3>可使用的打卡地點</h3>
+    <p id="locationsStatus" role="status" aria-live="polite">
+      正在準備地點資料...
+    </p>
+    <ul id="locationsList"></ul>
+  </div>
+
 </section>
 
 <section id="bindSection" class="hidden">
@@ -91,6 +100,10 @@ const boundEmployeeCode = document.getElementById('boundEmployeeCode');
 const boundEmployeeName = document.getElementById('boundEmployeeName');
 const employeeStatus = document.getElementById('employeeStatus');
 
+const locationsSection = document.getElementById('locationsSection');
+const locationsStatus = document.getElementById('locationsStatus');
+const locationsList = document.getElementById('locationsList');
+
   function setStatus(message, kind = '') {
     statusElement.textContent = message;
     statusElement.className = kind;
@@ -112,7 +125,9 @@ employeeSection.classList.add('hidden');
 boundEmployeeCode.textContent = '';
 boundEmployeeName.textContent = '';
 employeeStatus.textContent = '';
-
+    
+locationsList.replaceChildren();
+locationsStatus.textContent = '正在準備地點資料...';
     
     if (LIFF_ID === 'REPLACE_WITH_LIFF_ID') {
       setStatus('尚未填入 LIFF ID，請先修改網頁程式碼。', 'error');
@@ -164,6 +179,8 @@ if (verified) {
       boundEmployeeCode.textContent = initResult.employeeCode;
       boundEmployeeName.textContent = initResult.employeeName;
       employeeStatus.textContent = 'LINE 帳號已完成員工身分綁定。';
+      
+      renderLocations(initResult.locations);
 
       employeeSection.classList.remove('hidden');
       bindSection.classList.add('hidden');
@@ -269,6 +286,50 @@ async function getEmployeeInitWithBackend(idToken) {
   return result;
 }
 
+function renderLocations(locations) {
+  locationsList.replaceChildren();
+
+  if (!Array.isArray(locations) || locations.length === 0) {
+    locationsStatus.textContent = '目前沒有可使用的打卡地點。';
+    return;
+  }
+
+  let count = 0;
+
+  locations.forEach(function (location) {
+    if (!location || typeof location.name !== 'string') {
+      return;
+    }
+
+    const name = location.name.trim();
+    const radius = Number(location.radius);
+
+    if (!name || !Number.isFinite(radius) || radius <= 0) {
+      return;
+    }
+
+    const item = document.createElement('li');
+
+    const typeLabel =
+      String(location.type || '').toUpperCase() === 'FIXED'
+        ? '固定地點'
+        : '其他地點';
+
+    item.textContent =
+      name + '（' + typeLabel + '，打卡半徑 ' +
+      Math.round(radius) + ' 公尺）';
+
+    locationsList.appendChild(item);
+    count++;
+  });
+
+  locationsStatus.textContent =
+    count > 0
+      ? '目前有 ' + count + ' 個可使用的打卡地點。'
+      : '目前沒有有效的打卡地點資料。';
+}
+
+  
 async function bindEmployeeWithBackend(idToken, employeeCode, enrollmentCode) {
   const response = await fetch(
     'https://line-attendance-api.a0976826943.workers.dev/bind-employee',
