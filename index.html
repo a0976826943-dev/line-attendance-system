@@ -46,6 +46,19 @@
     <ul id="locationsList"></ul>
   </div>
 
+<div id="gpsTestSection">
+  <h3>GPS 定位測試</h3>
+  <p>按下按鈕後，才會向手機要求目前位置。</p>
+
+  <button id="gpsTestButton" type="button">
+    測試 GPS 定位
+  </button>
+
+  <p id="gpsTestStatus" role="status" aria-live="polite">
+    尚未開始 GPS 定位測試。
+  </p>
+</div>
+
 </section>
 
 <section id="bindSection" class="hidden">
@@ -103,6 +116,9 @@ const employeeStatus = document.getElementById('employeeStatus');
 const locationsSection = document.getElementById('locationsSection');
 const locationsStatus = document.getElementById('locationsStatus');
 const locationsList = document.getElementById('locationsList');
+
+const gpsTestButton = document.getElementById('gpsTestButton');
+const gpsTestStatus = document.getElementById('gpsTestStatus');
 
   function setStatus(message, kind = '') {
     statusElement.textContent = message;
@@ -329,6 +345,53 @@ function renderLocations(locations) {
       : '目前沒有有效的打卡地點資料。';
 }
 
+function testGpsLocation() {
+  if (!navigator.geolocation) {
+    gpsTestStatus.textContent = '此裝置不支援 GPS 定位功能。';
+    return;
+  }
+
+  gpsTestButton.disabled = true;
+  gpsTestStatus.textContent = '正在取得手機 GPS 位置...';
+
+  navigator.geolocation.getCurrentPosition(
+    function (position) {
+      const accuracy = position.coords.accuracy;
+
+      if (!Number.isFinite(accuracy) || accuracy < 0) {
+        gpsTestStatus.textContent = '無法取得有效的 GPS 定位精度。';
+      } else {
+        gpsTestStatus.textContent =
+          'GPS 定位成功！目前定位精度約 ' +
+          Math.round(accuracy) + ' 公尺。';
+      }
+
+      gpsTestButton.disabled = false;
+    },
+
+    function (error) {
+      let message = 'GPS 定位失敗，請稍後再試。';
+
+      if (error.code === 1) {
+        message = '定位權限遭拒絕，請檢查 iPhone 的 LINE 定位設定。';
+      } else if (error.code === 2) {
+        message = '目前無法取得 GPS 位置，請確認定位服務。';
+      } else if (error.code === 3) {
+        message = 'GPS 定位逾時，請移至訊號較佳的位置再試。';
+      }
+
+      gpsTestStatus.textContent = message;
+      gpsTestButton.disabled = false;
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
+    }
+  );
+}
+
   
 async function bindEmployeeWithBackend(idToken, employeeCode, enrollmentCode) {
   const response = await fetch(
@@ -428,6 +491,7 @@ if (success) {
   }
   
 bindButton.addEventListener('click', handleBindEmployee);
+  gpsTestButton.addEventListener('click', testGpsLocation);
   window.addEventListener('load', initialize);
 </script>
 </body>
