@@ -21,7 +21,38 @@
   <button id="login" class="hidden" onclick="login()">使用 LINE 登入</button>
   <button id="retry" class="hidden" onclick="initialize()">重新檢查</button>
   <p id="profile"></p>
-  <small>測試版：不傳送身分資料、GPS 或打卡紀錄至任何伺服器。</small>
+  
+<section id="bindSection" class="hidden">
+  <h2>員工 LINE 身分綁定</h2>
+  <p>首次使用請輸入員工編號及一次性啟用碼。</p>
+
+  <label for="employeeCode">員工編號</label>
+  <input
+    id="employeeCode"
+    type="text"
+    placeholder="例如 E001"
+    maxlength="40"
+    autocomplete="off"
+  >
+
+  <label for="enrollmentCode">一次性啟用碼</label>
+  <input
+    id="enrollmentCode"
+    type="password"
+    placeholder="請輸入管理員提供的啟用碼"
+    maxlength="100"
+    autocomplete="off"
+  >
+
+  <button id="bindButton" type="button" disabled>
+    綁定 LINE 帳號
+  </button>
+
+  <p id="bindStatus" role="status" aria-live="polite"></p>
+</section>
+  
+<small>目前為測試版：LINE 登入憑證會傳送至後端進行身分驗證；員工綁定功能尚未開放，GPS 與打卡功能尚未啟用。</small>
+
 </main>
 <script>
   // 將下方文字改成 LINE Developers 顯示的真正 LIFF ID。
@@ -30,6 +61,12 @@
   const loginButton = document.getElementById('login');
   const retryButton = document.getElementById('retry');
   const profileElement = document.getElementById('profile');
+  
+const bindSection = document.getElementById('bindSection');
+const employeeCodeInput = document.getElementById('employeeCode');
+const enrollmentCodeInput = document.getElementById('enrollmentCode');
+const bindButton = document.getElementById('bindButton');
+const bindStatus = document.getElementById('bindStatus');
 
   function setStatus(message, kind = '') {
     statusElement.textContent = message;
@@ -40,6 +77,13 @@
     loginButton.classList.add('hidden');
     retryButton.classList.add('hidden');
     profileElement.textContent = '';
+    
+bindSection.classList.add('hidden');
+bindButton.disabled = true;
+employeeCodeInput.value = '';
+enrollmentCodeInput.value = '';
+bindStatus.textContent = '';
+
     if (LIFF_ID === 'REPLACE_WITH_LIFF_ID') {
       setStatus('尚未填入 LIFF ID，請先修改網頁程式碼。', 'error');
       return;
@@ -72,11 +116,21 @@ setStatus('LINE 已登入，正在進行後端身分驗證...', '');
 
 const verified = await verifyIdentityWithBackend(idToken);
 
+
 if (verified) {
   setStatus('LINE 後端身分驗證成功！', 'ok');
+
+  bindSection.classList.remove('hidden');
+  bindButton.disabled = true;
+  bindStatus.textContent = '請輸入員工編號與啟用碼。綁定功能尚未啟用。';
+
 } else {
   setStatus('LINE 後端身分驗證未通過。', 'error');
+
+  bindSection.classList.add('hidden');
+  bindButton.disabled = true;
 }
+
 
 
       if (liff.isInClient()) {
