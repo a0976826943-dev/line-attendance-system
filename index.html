@@ -68,6 +68,11 @@
     請先確認員工身分、打卡地點及 GPS 定位。
   </p>
 
+<label for="punchLocationSelect">選擇打卡地點</label>
+<select id="punchLocationSelect" disabled>
+  <option value="">請先載入核准打卡地點</option>
+</select>
+
   <button id="clockInButton" type="button" disabled>
     上班打卡
   </button>
@@ -140,6 +145,7 @@ const locationsList = document.getElementById('locationsList');
 const gpsTestButton = document.getElementById('gpsTestButton');
   
 const punchSection = document.getElementById('punchSection');
+const punchLocationSelect = document.getElementById('punchLocationSelect');
 const clockInButton = document.getElementById('clockInButton');
 const clockOutButton = document.getElementById('clockOutButton');
 const punchStatus = document.getElementById('punchStatus');
@@ -152,6 +158,44 @@ let punchInProgress = false;
 
 const PUNCH_ENABLED = false;
   
+function renderPunchLocationOptions() {
+  punchLocationSelect.innerHTML = '';
+
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '請選擇打卡地點';
+  punchLocationSelect.appendChild(placeholder);
+
+  const locations = approvedLocations.filter(function (location) {
+    return location &&
+      location.id &&
+      String(location.type || '').toUpperCase() === 'FIXED' &&
+      Number.isFinite(Number(location.lat)) &&
+      Number.isFinite(Number(location.lon)) &&
+      Number.isFinite(Number(location.radius)) &&
+      Number(location.radius) > 0;
+  });
+
+  locations.forEach(function (location) {
+    const option = document.createElement('option');
+    option.value = location.id;
+    option.textContent = location.name + ' (' + location.id + ')';
+    punchLocationSelect.appendChild(option);
+  });
+
+  punchLocationSelect.value = '';
+  punchLocationSelect.disabled = locations.length === 0;
+}
+
+punchLocationSelect.addEventListener('change', function () {
+  gpsTestStatus.textContent =
+    '打卡地點已變更，請重新測試 GPS 定位。';
+
+  punchStatus.textContent = PUNCH_ENABLED
+    ? '打卡地點已變更，請重新確認定位後再打卡。'
+    : '打卡功能準備中，尚未開放使用。';
+});
+
   function setStatus(message, kind = '') {
     statusElement.textContent = message;
     statusElement.className = kind;
@@ -184,7 +228,9 @@ employeeStatus.textContent = '';
 locationsList.replaceChildren();
 locationsStatus.textContent = '正在準備地點資料...';
 approvedLocations = [];
-    
+punchLocationSelect.value = '';
+punchLocationSelect.disabled = true;
+
     if (LIFF_ID === 'REPLACE_WITH_LIFF_ID') {
       setStatus('尚未填入 LIFF ID，請先修改網頁程式碼。', 'error');
       return;
@@ -238,6 +284,7 @@ if (verified) {
 
       approvedLocations = Array.isArray(initResult.locations) ? initResult.locations : [];
       renderLocations(initResult.locations);
+      renderPunchLocationOptions();
 
       employeeSection.classList.remove('hidden');
       
@@ -258,6 +305,8 @@ clockOutButton.disabled = !PUNCH_ENABLED;
       punchSection.classList.add('hidden');
       bindSection.classList.remove('hidden');
       bindButton.disabled = false;
+      punchLocationSelect.value = '';
+      punchLocationSelect.disabled = true;
 
       bindStatus.textContent =
         '請輸入員工編號與一次性啟用碼，完成 LINE 帳號綁定。';
@@ -271,6 +320,8 @@ clockOutButton.disabled = !PUNCH_ENABLED;
     punchSection.classList.add('hidden');
     bindSection.classList.add('hidden');
     bindButton.disabled = true;
+    punchLocationSelect.value = '';
+    punchLocationSelect.disabled = true;
 
     setStatus('員工資料查詢失敗，請重新檢查登入。', 'error');
   }
@@ -282,6 +333,9 @@ clockOutButton.disabled = !PUNCH_ENABLED;
   punchSection.classList.add('hidden');
   bindSection.classList.add('hidden');
   bindButton.disabled = true;
+  
+  punchLocationSelect.value = '';
+  punchLocationSelect.disabled = true;
 }
 
 
@@ -294,6 +348,10 @@ clockOutButton.disabled = !PUNCH_ENABLED;
       punchSection.classList.add('hidden');
       clockInButton.disabled = true;
       clockOutButton.disabled = true;
+      
+punchLocationSelect.value = '';
+punchLocationSelect.disabled = true;
+
       
       setStatus('LIFF 初始化失敗：' + (error.message || String(error)), 'error');
       retryButton.classList.remove('hidden');
@@ -480,11 +538,15 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 function getOfficePunchLocation() {
-  const office = approvedLocations.find(function (location) {
-    return location &&
-      location.id === 'LOC001' &&
-      String(location.type || '').toUpperCase() === 'FIXED';
-  });
+  const selectedLocationId = punchLocationSelect.value;
+
+const office = approvedLocations.find(function (location) {
+  return location &&
+    selectedLocationId !== '' &&
+    location.id === selectedLocationId &&
+    String(location.type || '').toUpperCase() === 'FIXED';
+});
+
 
   if (!office) {
     return null;
@@ -522,7 +584,7 @@ function checkOfficePunchDistance(position) {
   if (!office) {
     return {
       ok: false,
-      message: '找不到有效的 LOC001 公司辦公室打卡地點。'
+      message: '請先選擇有效的核准打卡地點'
     };
   }
 
@@ -567,7 +629,7 @@ function checkOfficePunchDistance(position) {
   if (distance > office.radius) {
     return {
       ok: false,
-      message: '距離公司辦公室約 ' +
+      message: '距離' + office.name + '約 ' +
         Math.round(distance) +
         ' 公尺，超出 ' +
         Math.round(office.radius) +
@@ -582,28 +644,24 @@ function checkOfficePunchDistance(position) {
     longitude: longitude,
     accuracy: accuracy,
     distanceM: Math.round(distance),
-    message: '目前距離公司辦公室約 ' +
+    message: '目前距離' + office.name + '約 ' +
       Math.round(distance) +
       ' 公尺，位於允許打卡範圍內。'
   };
 }
 
 function getOfficeDistanceResult(position) {
-  const office = approvedLocations.find(function (location) {
-    return location &&
-      location.id === 'LOC001' &&
-      String(location.type || '').toUpperCase() === 'FIXED';
-  });
+  const office = getOfficePunchLocation();
 
   if (!office) {
-    return '找不到 LOC001 公司辦公室的核准地點資料。';
+    return '請先選擇有效的核准打卡地點。';
   }
 
   const distance = calculateDistanceMeters(
     position.coords.latitude,
     position.coords.longitude,
-    Number(office.lat),
-    Number(office.lon)
+    office.latitude,
+    office.longitude
   );
 
   const radius = Number(office.radius);
@@ -615,7 +673,7 @@ function getOfficeDistanceResult(position) {
 
   const withinRange = distance <= radius;
 
-  return '距離公司辦公室約 ' +
+  return '距離' + office.name + '約 ' +
     Math.round(distance) + ' 公尺；' +
     (withinRange
       ? '目前位於設定的 ' + Math.round(radius) + ' 公尺範圍內。'
